@@ -6,44 +6,24 @@
 <title>Aplicador Neuropsicológico — Skeleton (TESLIP / TENOM / RUCHE-M / TEIC)</title>
 <style>
   :root{
-    --bg:#f4f9f6;
+    --bg:#f4f6f9;
     --card:#fff;
     --muted:#666;
     --primary:#0b66d1;
-    --accent:#2d9c5f;
-    --border:#d9e4dd;
+    --border:#e0e4eb;
   }
   body{
     font-family:system-ui,Roboto,Arial;
     background:var(--bg);
     color:#1a1a1a;
     max-width:1100px;
-    margin:0 auto;
-    padding:0;
-  }
-  header{
-    background:var(--accent);
-    color:#fff;
+    margin:20px auto;
     padding:16px;
-    position:sticky;
-    top:0;
-    z-index:10;
-    box-shadow:0 2px 8px rgba(0,0,0,0.15);
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
   }
-  header h1{
-    margin:0;
-    font-size:1.5rem;
-  }
-  header .logo{
-    font-weight:bold;
-    font-size:1rem;
-    opacity:0.9;
-  }
-  main{
-    padding:20px;
+  h1{
+    margin:0 0 12px;
+    font-size:1.8rem;
+    color:#222;
   }
   h3{
     margin:0 0 8px;
@@ -106,47 +86,43 @@
 </style>
 </head>
 <body>
-  <header>
-    <h1>Aplicador Neuropsicológico</h1>
-    <div class="logo">TESLIP · TENOM · RUCHE-M · TEIC</div>
-  </header>
-  <main>
-    <div class="card">
-      <div class="muted">Testes disponíveis: TESLIP, TENOM, RUCHE-M, TEIC. Carregue as normas via CSV.</div>
-      <div style="margin-top:14px" class="row">
-        <label>Selecione teste: <select id="selectTest"></select></label>
-        <label>Idade (anos): <input id="age" type="number" min="0" value="30"/></label>
-        <label>Escolaridade (anos): <input id="education" type="number" min="0" value="12"/></label>
-      </div>
-    </div>
+  <h1>Aplicador Neuropsicológico</h1>
 
-    <div id="testArea" class="card"></div>
-
-    <div id="resultCard" class="card" style="display:none">
-      <h3>Resultado</h3>
-      <div id="resultSummary"></div>
-      <pre id="resultJson" style="margin-top:10px"></pre>
+  <div class="card">
+    <div class="muted">Testes disponíveis: TESLIP, TENOM, RUCHE-M, TEIC. Carregue as normas via CSV.</div>
+    <div style="margin-top:14px" class="row">
+      <label>Selecione teste: <select id="selectTest"></select></label>
+      <label>Idade (anos): <input id="age" type="number" min="0" value="30"/></label>
+      <label>Escolaridade (anos): <input id="education" type="number" min="0" value="12"/></label>
     </div>
+  </div>
 
-    <div class="card">
-      <h3>Gerenciar normas (CSV)</h3>
-      <div class="muted">Upload de CSV com normas. Formato mínimo (colunas):</div>
-      <pre>testId, minAge, maxAge, minEdu, maxEdu, rawMin, rawMax, percentile, classification</pre>
-      <input id="fileNorms" type="file" accept=".csv" />
-      <div style="margin-top:10px">
-        <button id="downloadModel">Baixar modelo CSV</button>
-        <span id="normMsg" class="muted" style="margin-left:10px"></span>
-      </div>
-      <div style="margin-top:10px" class="muted">Normas carregadas: <span id="normCount">0</span></div>
-    </div>
+  <div id="testArea" class="card"></div>
 
-    <div class="card">
-      <h3>Configuração / Admin</h3>
-      <div class="muted">Edite a configuração dos testes abaixo. As normas são carregadas separadamente.</div>
-      <textarea id="configEditor" style="width:100%;height:220px;margin-top:10px;font-family:monospace;font-size:13px"></textarea>
-      <div style="margin-top:12px"><button id="applyConfig">Aplicar configuração</button></div>
+  <div id="resultCard" class="card" style="display:none">
+    <h3>Resultado</h3>
+    <div id="resultSummary"></div>
+    <pre id="resultJson" style="margin-top:10px"></pre>
+  </div>
+
+  <div class="card">
+    <h3>Gerenciar normas (CSV)</h3>
+    <div class="muted">Upload de CSV com normas. Formato mínimo (colunas):</div>
+    <pre>testId, minAge, maxAge, minEdu, maxEdu, rawMin, rawMax, percentile, classification</pre>
+    <input id="fileNorms" type="file" accept=".csv" />
+    <div style="margin-top:10px">
+      <button id="downloadModel">Baixar modelo CSV</button>
+      <span id="normMsg" class="muted" style="margin-left:10px"></span>
     </div>
-  </main>
+    <div style="margin-top:10px" class="muted">Normas carregadas: <span id="normCount">0</span></div>
+  </div>
+
+  <div class="card">
+    <h3>Configuração / Admin</h3>
+    <div class="muted">Edite a configuração dos testes abaixo. As normas são carregadas separadamente.</div>
+    <textarea id="configEditor" style="width:100%;height:220px;margin-top:10px;font-family:monospace;font-size:13px"></textarea>
+    <div style="margin-top:12px"><button id="applyConfig">Aplicar configuração</button></div>
+  </div>
 
 <script>
 // (script permanece igual à versão anterior)
