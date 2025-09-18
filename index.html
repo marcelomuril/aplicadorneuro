@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Aplicador Neuropsicológico — Skeleton (TESLIP / TENOM / RUCHE-M / TEIC)</title>
+<style>
+  :root{--bg:#ffffff;--card:#fff;--muted:#666}
+  body{font-family:system-ui,Roboto,Arial;max-width:1100px;margin:18px auto;padding:16px}
+  h1{margin:0 0 8px}
+  .card{background:var(--card);border:1px solid #e6e9ef;border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:0 6px 18px rgba(12,18,30,0.03)}
+  label{display:block;margin:6px 0}
+  input[type=number], input[type=text], select{padding:8px;border-radius:6px;border:1px solid #d6d9e0}
+  button{padding:8px 12px;border-radius:8px;border:0;background:#0b66d1;color:#fff;cursor:pointer}
+  pre{background:#f7f9fc;padding:10px;border-radius:6px;overflow:auto}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .muted{color:var(--muted);font-size:0.9rem}
+</style>
+</head>
+<body>
+  <h1>Aplicador Neuropsicológico — Skeleton</h1>
+  <div class="card">
+    <div class="muted">Testes disponíveis: TESLIP, TENOM, RUCHE-M, TEIC — carregue as normas via CSV ou deixe como placeholders.</div>
+    <div style="margin-top:10px" class="row">
+      <label>Selecione teste: <select id="selectTest"></select></label>
+      <label>Idade (anos): <input id="age" type="number" min="0" value="30"/></label>
+      <label>Escolaridade (anos): <input id="education" type="number" min="0" value="12"/></label>
+    </div>
+  </div>
+
+  <div id="testArea" class="card"></div>
+
+  <div id="resultCard" class="card" style="display:none">
+    <h3>Resultado</h3>
+    <div id="resultSummary"></div>
+    <pre id="resultJson" style="margin-top:8px"></pre>
+  </div>
+
+  <div class="card">
+    <h3>Gerenciar normas (CSV)</h3>
+    <div class="muted">Faça upload de um CSV com as normas para cada teste. Modelo mínimo (colunas):</div>
+    <pre>testId, minAge, maxAge, minEdu, maxEdu, rawMin, rawMax, percentile, classification</pre>
+    <input id="fileNorms" type="file" accept=".csv" />
+    <div style="margin-top:8px">
+      <button id="downloadModel">Baixar modelo CSV</button>
+      <span id="normMsg" class="muted" style="margin-left:10px"></span>
+    </div>
+    <div style="margin-top:8px" class="muted">Normas carregadas: <span id="normCount">0</span></div>
+  </div>
+
+  <div class="card">
+    <h3>Configuração / Admin</h3>
+    <div class="muted">Você pode editar a configuração dos testes (itens e regras) abaixo. As normas são carregadas separadamente via CSV.</div>
+    <textarea id="configEditor" style="width:100%;height:220px;margin-top:8px;font-family:monospace;font-size:13px"></textarea>
+    <div style="margin-top:8px"><button id="applyConfig">Aplicar configuração</button></div>
+  </div>
+
+<script>
+// --- Skeleton app: estrutura básica pronta para receber normas e implementar mapeamento.
+// Instruções:
+// 1) Configure os testes abaixo (items, tipos, scoreMapping).
+// 2) Faça upload de CSV com normas no formato modelo.
+// 3) Preencha respostas e clique em Calcular.
+
+const defaultConfig = {
+  tests:[
+    {id:'TESLIP', name:'TESLIP', description:'TESLIP — placeholder', items:[
+      {id:'free1', label:'Evocação livre 1 - nº palavras', type:'number', scoreMapping:{fn:'identity'}},
+      {id:'free2', label:'Evocação livre 2 - nº palavras', type:'number', scoreMapping:{fn:'identity'}},
+      {id:'cued', label:'Recordação com pistas - nº', type:'number', scoreMapping:{fn:'identity'}},
+      {id:'naming', label:'Nomeação visual - acertos', type:'number', scoreMapping:{fn:'identity'}}
+    ], scoring:{mode:'sum'} },
+
+    {id:'TENOM', name:'TENOM', description:'TENOM — placeholder', items:[
+      {id:'t1', label:'Item 1 - acerto (1/0)', type:'number', scoreMapping:{fn:'identity'}},
+      {id:'t2', label:'Item 2 - acerto (1/0)', type:'number', scoreMapping:{fn:'identity'}},
+      {id:'t3', label:'Item 3 - acerto (1/0)', type:'number', scoreMapping:{fn:'identity'}}
+    ], scoring:{mode:'sum'} },
+
+    {id:'RUCHE-M', name:'RUCHE-M', description:'RUCHE-M — placeholder', items:[
+      {id:'vis1', label:'Memória visuoespacial - tentativa 1', type:'number', scoreMapping:{fn:'identity'}},
+      {id:'vis2', label:'Memória visuoespacial - tentativa 2', type:'number', scoreMapping:{fn:'identity'}}
+    ], scoring:{mode:'sum'} },
+
+    {id:'TEIC', name:'TEIC', description:'TEIC — placeholder', items:[
+      {id:'est', label:'Estimativas e inferências - pontuação', type:'number', scoreMapping:{fn:'identity'}}
+    ], scoring:{mode:'sum'} }
+  ]
+};
+
+let testsConfig = defaultConfig;
+let norms = []; // array of norm rows parsed from CSV
+
+// --- UI refs
+const selectTest = document.getElementById('selectTest');
+const testArea = document.getElementById('testArea');
+const resultCard = document.getElementById('resultCard');
+const resultSummary = document.getElementById('resultSummary');
+const resultJson = document.getElementById('resultJson');
+const ageInput = document.getElementById('age');
+const eduInput = document.getElementById('education');
+const fileNorms = document.getElementById('fileNorms');
+const normCount = document.getElementById('normCount');
+const normMsg = document.getElementById('normMsg');
+const configEditor = document.getElementById('configEditor');
+
+function populateSelect(){
+  selectTest.innerHTML='';
+  testsConfig.tests.forEach(t=>{
+    const opt = document.createElement('option'); opt.value=t.id; opt.textContent=t.name; selectTest.appendChild(opt);
+  });
+}
+
+function renderTestArea(){
+  const testId = selectTest.value;
+  const test = testsConfig.tests.find(t=>t.id===testId);
+  testArea.innerHTML = '';
+  const card = document.createElement('div'); card.className='card';
+  const desc = document.createElement('div'); desc.textContent = test.description || '';
+  card.appendChild(desc);
+
+  const form = document.createElement('form'); form.id='testForm';
+  test.items.forEach(it=>{
+    const lab = document.createElement('label'); lab.textContent = it.label;
+    if(it.type==='number'){
+      const inp = document.createElement('input'); inp.type='number'; inp.id=it.id; inp.name=it.id; inp.value=0; inp.addEventListener('input', ()=> computeAndShow()); lab.appendChild(inp);
+    } else {
+      const inp = document.createElement('input'); inp.type='text'; inp.id=it.id; inp.name=it.id; inp.addEventListener('input', ()=> computeAndShow()); lab.appendChild(inp);
+    }
+    form.appendChild(lab);
+  });
+  const btn = document.createElement('button'); btn.type='button'; btn.textContent='Calcular'; btn.addEventListener('click', ()=> computeAndShow());
+  form.appendChild(btn);
+  card.appendChild(form);
+  testArea.appendChild(card);
+}
+
+function computeAndShow(){
+  const testId = selectTest.value;
+  const test = testsConfig.tests.find(t=>t.id===testId);
+  const form = document.getElementById('testForm');
+  if(!form) return;
+  const values = {};
+  test.items.forEach(it=>{
+    const el = form[it.id];
+    let v = (el && el.value!=='')? parseFloat(el.value) : 0;
+    if(Number.isNaN(v)) v = 0;
+    values[it.id] = v;
+  });
+
+  // simple scoring: sum of numeric item scores (apply mapping if present)
+  let total = 0;
+  const breakdown = [];
+  for(const it of test.items){
+    const v = values[it.id] || 0;
+    let score = 0;
+    if(it.type==='number'){
+      if(it.scoreMapping && it.scoreMapping.multiplier) score = v * it.scoreMapping.multiplier;
+      else score = v;
+    }
+    breakdown.push({id:it.id,label:it.label,raw:v,score});
+    total += Number(score);
+  }
+
+  // lookup norms by test, age and education
+  const age = parseFloat(ageInput.value) || 0;
+  const edu = parseFloat(eduInput.value) || 0;
+  const matched = lookupNorm(testId, age, edu, total);
+
+  // show results
+  resultCard.style.display = 'block';
+  resultSummary.innerHTML = `<div><strong>Teste:</strong> ${test.name}</div><div><strong>Escore bruto:</strong> ${total}</div>`;
+  if(matched){
+    resultSummary.innerHTML += `<div><strong>Percentil / classificação encontrada:</strong> ${matched.percentile} — ${matched.classification}</div>`;
+  } else {
+    resultSummary.innerHTML += `<div class='muted'><em>Sem norma correspondente carregada para essa faixa (idade/escolaridade) — carregue o CSV ou ajuste normas.</em></div>`;
+  }
+
+  resultJson.textContent = JSON.stringify({testId,total,age,education:edu,breakdown,matched:matched||null}, null, 2);
+}
+
+function lookupNorm(testId, age, edu, raw){
+  // norms: array of rows with properties: testId, minAge, maxAge, minEdu, maxEdu, rawMin, rawMax, percentile, classification
+  const rows = norms.filter(r=>r.testId===testId);
+  for(const r of rows){
+    const minAge = parseFloat(r.minAge) || -Infinity; const maxAge = parseFloat(r.maxAge) || Infinity;
+    const minEdu = parseFloat(r.minEdu) || -Infinity; const maxEdu = parseFloat(r.maxEdu) || Infinity;
+    const rawMin = parseFloat(r.rawMin) || -Infinity; const rawMax = parseFloat(r.rawMax) || Infinity;
+    if(age >= minAge && age <= maxAge && edu >= minEdu && edu <= maxEdu && raw >= rawMin && raw <= rawMax){
+      return r; // return the first matching row
+    }
+  }
+  return null;
+}
+
+// --- CSV parsing (very small parser to avoid libs). Expects header row.
+function parseCSV(text){
+  const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0);
+  if(lines.length===0) return [];
+  const header = lines[0].split(/,\s*/).map(h=>h.trim());
+  const out = [];
+  for(let i=1;i<lines.length;i++){
+    const row = lines[i].split(/,\s*/);
+    const obj = {};
+    for(let j=0;j<header.length;j++){
+      obj[header[j]] = row[j] !== undefined ? row[j].trim() : '';
+    }
+    out.push(obj);
+  }
+  return out;
+}
+
+fileNorms.addEventListener('change', (ev)=>{
+  const f = ev.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      const parsed = parseCSV(e.target.result);
+      // normalize keys to expected names
+      norms = parsed.map(r=>{
+        const normalized = {
+          testId: r.testId || r.testID || r.Test || r.test || '',
+          minAge: r.minAge || r.min_age || r.min || '',
+          maxAge: r.maxAge || r.max_age || r.max || '',
+          minEdu: r.minEdu || r.min_edu || r.minEducation || r.minEducationYears || '',
+          maxEdu: r.maxEdu || r.max_edu || r.maxEducation || r.maxEducationYears || '',
+          rawMin: r.rawMin || r.raw_min || r.raw_minimum || r.raw_min || '',
+          rawMax: r.rawMax || r.raw_max || r.raw_maximum || r.raw_max || '',
+          percentile: r.percentile || r.p || r.percent || '',
+          classification: r.classification || r.class || r.label || ''
+        };
+        return normalized;
+      });
+      normCount.textContent = norms.length;
+      normMsg.textContent = 'Normas carregadas';
+    }catch(err){ normMsg.textContent = 'Erro ao processar CSV: '+err.message }
+  };
+  reader.readAsText(f, 'utf-8');
+});
+
+// download model CSV
+document.getElementById('downloadModel').addEventListener('click', ()=>{
+  const model = 'testId,minAge,maxAge,minEdu,maxEdu,rawMin,rawMax,percentile,classification\nTESLIP,18,39,0,12,0,4,5,"Abaixo do esperado"\nTESLIP,18,39,0,12,5,8,25,"Limítrofe"\nTENOM,18,99,0,99,0,1,10,"Baixo"\n';
+  const blob = new Blob([model], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'norm_model.csv'; a.click(); URL.revokeObjectURL(url);
+});
+
+// config editor
+configEditor.value = JSON.stringify(testsConfig, null, 2);
+document.getElementById('applyConfig').addEventListener('click', ()=>{
+  try{
+    const parsed = JSON.parse(configEditor.value);
+    if(!parsed.tests) throw new Error('Formato inválido: falta propriedade tests');
+    testsConfig = parsed; populateSelect(); renderTestArea();
+    normMsg.textContent = 'Configuração aplicada';
+  }catch(err){ normMsg.textContent = 'JSON inválido: '+err.message }
+});
+
+// initial
+populateSelect(); renderTestArea();
+selectTest.addEventListener('change', renderTestArea);
+
+</script>
+</body>
+</html>
